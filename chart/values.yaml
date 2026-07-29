@@ -1,0 +1,11 @@
+
+global:
+  labels:
+    example: "true"
+  annotations:
+    example: "true"
+
+environmentType: ""
+hostname: ""
+from_values: "default"
+appName: "None"

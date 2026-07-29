@@ -1,0 +1,4 @@
+environmentType: "default"
+hostname: "example.local"
+from_values: "test"
+appName: "${ENV_APP_NAME}"

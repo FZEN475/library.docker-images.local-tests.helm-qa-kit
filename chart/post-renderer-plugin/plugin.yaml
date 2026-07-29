@@ -1,0 +1,11 @@
+name: "plugin-patch-example"
+version: "1.0.0"
+type: postrenderer/v1
+apiVersion: v1
+runtime: subprocess
+runtimeConfig:
+  platformCommand:
+    - command: "sh"
+      args:
+        - "-c"
+        - "yq 'select(.kind == \"ConfigMap\").metadata.labels.\"test-label\" = \"verified\"' -"

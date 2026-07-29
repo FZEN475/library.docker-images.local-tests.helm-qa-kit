@@ -1,0 +1,14 @@
+apiVersion: v2
+name: helm-chart-example-ci
+version: 0.0.1
+description: "Тестовый cm развёрнутый из ci"
+type: application
+maintainers: 
+  - name: FZEN
+    email: admin@fzen.pro
+    url: https://fzen.pro
+appVersion: 1.0.0
+dependencies:
+  - name: helm-library
+    version: ">=0.0.0"
+    repository: 'oci://registry.gitlab.fizn.ru:443/library/helm/utility/charts'

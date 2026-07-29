@@ -1,0 +1,6 @@
+dependencies:
+- name: helm-library
+  repository: oci://gitlab-registry.gitlab.svc:5000/library/helm/utility/charts
+  version: 0.4.15
+digest: sha256:71c134b4cba75ba143cce4ccf118b4d6922f3293e12df6aa298e0e5c443f53fc
+generated: "2026-02-09T14:41:38.8052478+03:00"

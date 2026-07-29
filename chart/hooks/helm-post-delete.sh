@@ -1,0 +1,1 @@
+echo "helm-post-delete.sh"

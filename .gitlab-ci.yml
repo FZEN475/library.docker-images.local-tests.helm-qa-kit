@@ -1,0 +1,136 @@
+include:
+  - component: $CI_SERVER_FQDN/library/to-be-continuous/Docker/gitlab-ci-docker@master
+    inputs:
+      # Тесты
+      build-tool: buildah
+      build-args: "--format=docker"
+      config-file: "/tmp/config.json"
+      
+      prod-publish-strategy: auto
+      
+      release-extra-tags: latest \g<major>.\g<minor> \g<major>
+      semrel-release-disabled: true
+      
+      trivy-disabled: true
+      trivy-args: "--timeout 15m --ignore-unfixed --pkg-types os --exit-on-eol 1 --detection-priority comprehensive --disable-telemetry --skip-version-check "
+      
+      cosign-strategy: never
+#      cosign-dist-url: "https://github.com/sigstore/cosign/releases/download/v2.5.0/cosign-linux-amd64"
+
+  - component: $CI_SERVER_FQDN/library/cicd/templates/ci-remote-exec/docker-healthcheck@main
+    inputs:
+      stage: package-test
+      verified-image: "${docker_image_digest}"
+      docker-host: "tcp://workflow01:2376"
+      docker-healthcheck-args: "--entrypoint sleep"
+      docker-container-args: "infinity"
+
+  - component: $CI_SERVER_FQDN/library/cicd/templates/mirroring/oci-repository@main
+    inputs:
+      stage: "publish"
+      src-oci-image: "${docker_repository}"
+      dest-oci-image: "$DOCKER_MIRROR_REPO"
+
+  - component: $CI_SERVER_FQDN/library/cicd/auto-gitlab/auto-release@main
+
+variables:
+  CI_DEBUG_TRACE: "false"
+  #  TRACE: "true"
+  CUSTOM_CA_CERTS: "$CI_SERVER_TLS_CA_FILE"
+  DEFAULT_CA_CERTS: "/var/run/secrets/kubernetes.io/serviceaccount/ca.crt"
+
+  DOCKER_MIRROR_REPO: "ghcr.io/fzen475/helm-qa-kit"
+
+stages:
+  - build                                # docker-hadolint,
+  - package-build                        # docker-kaniko-build, docker-dind-build, docker-buildah-build
+  - package-test                         # docker-healthcheck, docker-trivy, docker-sbom
+  - publish                              # docker-publish
+
+  - auto-gitlab
+
+.docker-base:
+  services:
+    - name: "$TBC_TRACKING_IMAGE"
+      command: ["--service", "docker", "8.0.10"]
+  before_script:
+    - !reference [.docker-scripts]
+  tags:
+    - docker-builder
+
+# ci-remote-exec/docker-healthcheck
+.ci-remote-exec:docker-healthcheck:public:extends:
+  tags:
+    - docker-builder
+
+.ci-remote-exec:docker-healthcheck:public:needs:
+  - job: docker-buildah-build
+
+# mirroring/oci-repository
+.mirroring:oci-repository:public:needs:
+  - job: docker-publish
+  - job: docker-hadolint
+    optional: true
+  - job: ci-remote-exec:docker-healthcheck:core
+    optional: true
+  - job: docker-sbom
+    optional: true
+  - job: docker-trivy
+    optional: true
+
+.mirroring:oci-repository:public:extends:
+  tags:
+    - docker-builder
+
+# auto-gitlab/auto-release
+.auto-gitlab:auto-core:public:needs:
+  - job: docker-publish
+  - job: docker-hadolint
+    optional: true
+  - job: ci-remote-exec:docker-healthcheck:core
+    optional: true
+  - job: docker-sbom
+    optional: true
+  - job: docker-trivy
+    optional: true
+  - job: mirroring:oci-repository:core
+    optional: true
+
+.auto-gitlab:auto-release:public:RELEASE-md:
+  - docker_image="${docker_image/$CI_REGISTRY/registry.gitlab.fizn.ru}"
+  - |
+    cat > RELEASE.md <<EOF
+    # Release ${CI_COMMIT_TAG}
+    [🚀 **Релиз**](${CI_PROJECT_URL}/-/releases/permalink/latest)
+    
+    \`\`\`bash
+    docker pull ${docker_image}
+    \`\`\`
+    
+    \`\`\`bash
+    docker pull ${docker_image%:*}:latest
+    \`\`\`
+    
+    ---
+    
+    [**Релиз** Зеркало](https://github.com/FZEN475/library.docker-images.local-tests.helm-qa-kit.git)
+    
+    \`\`\`bash
+    docker pull ghcr.io/fzen475/helm-qa-kit:latest
+    \`\`\`
+    
+    ---
+    
+    [**Релиз** Зеркало (tag)](https://github.com/FZEN475/library.docker-images.local-tests.helm-qa-kit/${docker_tag})
+
+    \`\`\`bash
+    docker pull ghcr.io/fzen475/helm-qa-kit:${docker_tag}
+    \`\`\`
+
+    ---
+    
+    ## Примечание
+    - Теги `latest` и `${docker_tag}` могут обновляться независимо
+    - Для продакшена рекомендуется фиксировать конкретный tag
+    
+    EOF
